@@ -4,7 +4,7 @@ This repository follows the book [operating-system-in-1000-lines](https://operat
 ## Requirements
 - `bash`
 - `tar`
-- c compiler
+- `clang` (to compile for different architectures)
 - `lld`
 - `llvm` package (`llvm-objcopy`, `llvm-objdump`, `llvm-readelf`)
 - `qemu-system-riscv32`
