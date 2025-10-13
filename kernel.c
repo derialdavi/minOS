@@ -1,4 +1,5 @@
 #include "kernel.h"
+#include "common.h"
 
 typedef unsigned char uint8_t;
 typedef unsigned int uint32_t;
@@ -60,10 +61,9 @@ void kernel_main(void)
     // Writes into .bss section value 0, some bootloaders do it automatically
     memset(__bss, 0, (size_t) __bss_end - (size_t) __bss);
 
-    // Prints `*s` to the console
-    const char *s = "\nHello world!\n";
-    for (size_t i = 0; s[i] != '\0'; i++)
-        putchar(s[i]);
+    printf("\nHello %s\n", "World!");
+    printf("1 + 2 = %d\n", 1 + 2);
+    printf("Pointer: %x\n", 0x1234abcd);
 
     for (;;)
         __asm__ __volatile__("wfi");
