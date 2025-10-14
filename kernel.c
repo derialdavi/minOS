@@ -12,6 +12,16 @@ typedef uint32_t size_t;
  */
 extern char __bss[], __bss_end[], __stack_top[];
 
+/* Defined as a macro so that `__FILE__` and `__LINE__` gets the value of the
+ * file where `PANIC` is called, not where it's defined (here). */
+#define PANIC(fmt, ...)                                                        \
+    do                                                                         \
+    {                                                                          \
+        printf("PANIC: %s:%d: " fmt "\n", __FILE__, __LINE__, ##__VA_ARGS__);  \
+                                                                               \
+        while (1) {}                                                           \
+    } while (0)
+
 /* Sets register value to invoke a sbi call. Registers `a0` and `a1` can be changed when invoking
  * the call because in those registers will be eventually write an error value or the value returned
  * by the call. Those values are stored in this kernel with the structure `sbiret`. */
@@ -53,6 +63,9 @@ void kernel_main(void)
     printf("\nHello %s\n", "World!");
     printf("1 + 2 = %d\n", 1 + 2);
     printf("Pointer: %x\n", 0x1234abcd);
+
+    PANIC("Booted!");        // Kernel panics and "stops" here.
+    printf("Not printed\n");
 
     for (;;)
         __asm__ __volatile__("wfi");
