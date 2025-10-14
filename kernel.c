@@ -45,17 +45,6 @@ void putchar(char c)
     sbi_call(c, 0, 0, 0, 0, 0, 0, 1);
 }
 
-// Writes character `c` in memory addresses `buf`...`buf`+`n`
-void *memset(void *buf, char c, size_t n)
-{
-    uint8_t *p = (uint8_t *) buf;
-
-    while (n--)
-        *p++ = c;
-
-    return buf;
-}
-
 void kernel_main(void)
 {
     // Writes into .bss section value 0, some bootloaders do it automatically
