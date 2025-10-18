@@ -2,6 +2,8 @@
 
 #include "common.h"
 
+#define PAGE_SIZE (int) 4096
+
 struct trap_frame {
     uint32_t ra;
     uint32_t gp;

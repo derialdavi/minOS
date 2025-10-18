@@ -9,8 +9,10 @@ typedef uint32_t size_t;
  *   __bss[]: start address of the `.bss` section
  *   __bss_end[]: final address of the `.bss` section
  *   __stack_top[]: first available address after kernel code and data
+ *   __free_ram[]: first available address for allocated memeory
+ *   __free_ram_end[]: last available address for allocated memeory
  */
-extern char __bss[], __bss_end[], __stack_top[];
+extern char __bss[], __bss_end[], __stack_top[], __free_ram[], __free_ram_end[];
 
 /* Defined as a macro so that `__FILE__` and `__LINE__` gets the value of the
  * file where `PANIC` is called, not where it's defined (here). */
@@ -149,6 +151,19 @@ void putchar(char c)
     sbi_call(c, 0, 0, 0, 0, 0, 0, 1);
 }
 
+paddr_t alloc_pages(uint32_t n)
+{
+    static paddr_t next_available_paddr = (paddr_t) __free_ram;
+    paddr_t paddr = next_available_paddr;
+    next_available_paddr += n * PAGE_SIZE;
+
+    if (next_available_paddr > (paddr_t) __free_ram_end)
+        PANIC("Out of memory");
+
+    memset((void *) paddr, 0, n * PAGE_SIZE);
+    return paddr;
+}
+
 void kernel_main(void)
 {
     // Writes into .bss section value 0, some bootloaders do it automatically
@@ -159,11 +174,13 @@ void kernel_main(void)
     // stored in `stvec`
     WRITE_CSR(stvec, (uint32_t) kernel_entry);
 
-    printf("\nHello %s\n", "World!");
-    printf("1 + 2 = %d\n", 1 + 2);
-    printf("Pointer: %x\n", 0x1234abcd);
+    printf("Starting address: 0x%x\n", __free_ram);
+    printf("Last address: 0x%x\n", __free_ram_end);
 
-    __asm__ __volatile__("unimp"); // Generates a "illegal instruction" exception
+    paddr_t addr = alloc_pages(2);
+    printf("Allocated 2 pages starting from: 0x%x\n", addr);
+    addr = alloc_pages(1);
+    printf("Allocated new page starting from: 0x%x\n", addr);
 
     for (;;)
         __asm__ __volatile__("wfi");

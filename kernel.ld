@@ -30,4 +30,12 @@ SECTIONS {
     . = ALIGN(4); /* Padding */
     . += 128 * 1024;
     __stack_top = .;
+
+    /* Free memory area after the kernel stack space to use for allocated memory.
+       In practical operating systems on x86-64 memory regions are obtained
+       from the hardware at boot time. */
+    . = ALIGN(4096);
+    __free_ram = .;
+    . += 64 * 1024 * 1024;
+    __free_ram_end = .;
 }
