@@ -2,7 +2,18 @@
 
 #include "common.h"
 
-#define PAGE_SIZE (int) 4096
+#define PAGE_SIZE (int)     4096
+
+#define PROCS_MAX (int)     8
+#define PROC_UNUSED (int)   0
+#define PROC_RUNNABLE (int) 1
+
+struct process {
+    int pid;
+    int state;
+    vaddr_t sp;          // Stack pointer
+    uint8_t stack[8192]; // Kernel stack containing registers, return address and local variables
+};
 
 struct trap_frame {
     uint32_t ra;

@@ -13,6 +13,9 @@ typedef uint32_t size_t;
  *   __free_ram_end[]: last available address for allocated memeory
  */
 extern char __bss[], __bss_end[], __stack_top[], __free_ram[], __free_ram_end[];
+struct process procs[PROCS_MAX];
+struct process *current_proc; // Currently running process
+struct process *idle_proc;    // Idle process
 
 /* Defined as a macro so that `__FILE__` and `__LINE__` gets the value of the
  * file where `PANIC` is called, not where it's defined (here). */
@@ -55,6 +58,9 @@ __attribute__((aligned(4)))
 void kernel_entry(void)
 {
     __asm__ __volatile__(
+        // Retrieve the kernel stack of the running process from sscratch.
+        "csrrw sp, sscratch, sp\n"
+
         // Saves state of registers into memory, including stack pointer.
         "csrw sscratch, sp\n"
         "addi sp, sp, -4 * 31\n"
@@ -91,6 +97,10 @@ void kernel_entry(void)
 
         "csrr a0, sscratch\n"
         "sw a0, 4 * 30(sp)\n"
+
+        // Reset the kernel stack.
+        "addi a0, sp, 4 * 31\n"
+        "csrw sscratch, a0\n"
 
         // Calls `handle_trap` method with parameter `a0`, pointer to the last
         // memory address of the stack.
@@ -164,6 +174,147 @@ paddr_t alloc_pages(uint32_t n)
     return paddr;
 }
 
+__attribute__((naked))
+void context_switch(uint32_t *prev_sp, uint32_t *next_sp)
+{
+    __asm__ __volatile__(
+        // Save callee-saved registers onto the current process's stack.
+        "addi sp, sp, -13 * 4\n"
+        "sw ra,  0  * 4(sp)\n"
+        "sw s0,  1  * 4(sp)\n"
+        "sw s1,  2  * 4(sp)\n"
+        "sw s2,  3  * 4(sp)\n"
+        "sw s3,  4  * 4(sp)\n"
+        "sw s4,  5  * 4(sp)\n"
+        "sw s5,  6  * 4(sp)\n"
+        "sw s6,  7  * 4(sp)\n"
+        "sw s7,  8  * 4(sp)\n"
+        "sw s8,  9  * 4(sp)\n"
+        "sw s9,  10 * 4(sp)\n"
+        "sw s10, 11 * 4(sp)\n"
+        "sw s11, 12 * 4(sp)\n"
+
+        // Switch the stack pointer.
+        "sw sp, (a0)\n" // *prev_sp = sp;
+        "lw sp, (a1)\n" // sp = *next_sp;
+
+        // Restore callee-saved registers from the next process's stack.
+        "lw ra,  0  * 4(sp)\n"
+        "lw s0,  1  * 4(sp)\n"
+        "lw s1,  2  * 4(sp)\n"
+        "lw s2,  3  * 4(sp)\n"
+        "lw s3,  4  * 4(sp)\n"
+        "lw s4,  5  * 4(sp)\n"
+        "lw s5,  6  * 4(sp)\n"
+        "lw s6,  7  * 4(sp)\n"
+        "lw s7,  8  * 4(sp)\n"
+        "lw s8,  9  * 4(sp)\n"
+        "lw s9,  10 * 4(sp)\n"
+        "lw s10, 11 * 4(sp)\n"
+        "lw s11, 12 * 4(sp)\n"
+        "addi sp, sp, 13 * 4\n"
+        "ret\n"
+    );
+}
+
+struct process *create_process(uint32_t pc)
+{
+    // Find first unused process control structure
+    struct process *p = NULL;
+    size_t i;
+    for (i = 0; i < PROCS_MAX; i++)
+    {
+        if (procs[i].state == PROC_UNUSED)
+        {
+            p = &procs[i];
+            break;
+        }
+    }
+
+    if (p == NULL) PANIC("No free process slot!");
+
+    // Stack callee-saved registers. These register values will be restored in
+    // the first context switch in switch_context.
+    uint32_t *sp = (uint32_t *) &p->stack[sizeof(p->stack)];
+    *--sp = 0;                      // s11
+    *--sp = 0;                      // s10
+    *--sp = 0;                      // s9
+    *--sp = 0;                      // s8
+    *--sp = 0;                      // s7
+    *--sp = 0;                      // s6
+    *--sp = 0;                      // s5
+    *--sp = 0;                      // s4
+    *--sp = 0;                      // s3
+    *--sp = 0;                      // s2
+    *--sp = 0;                      // s1
+    *--sp = 0;                      // s0
+    *--sp = (uint32_t) pc;          // ra
+
+    p->pid = i+1;
+    p->state = PROC_RUNNABLE;
+    p->sp = (uint32_t) sp;
+
+    return p;
+}
+
+void delay(void)
+{
+    for (int i = 0; i < 30000000; i++)
+        __asm__ __volatile__("nop"); // do nothing
+}
+
+void scheduler(void)
+{
+    // Search for a runnable process
+    struct process *next = idle_proc;
+    for (int i = 0; i < PROCS_MAX; i++)
+    {
+        struct process *proc = &procs[(current_proc->pid + i) % PROCS_MAX];
+        if (proc->state == PROC_RUNNABLE && proc->pid > 0)
+        {
+            next = proc;
+            break;
+        }
+    }
+
+    // If there's no runnable process other than the current one, return and continue processing
+    if (next == current_proc)
+        return;
+
+    // Update stack pointer for new process
+    __asm__ __volatile__(
+        "csrw sscratch, %[sscratch]\n"
+        :
+        : [sscratch] "r" ((uint32_t) &next->stack[sizeof(next->stack)])
+    );
+
+    // Context switch
+    struct process *prev = current_proc;
+    current_proc = next;
+    context_switch(&prev->sp, &next->sp);
+}
+
+struct process *proc_a;
+struct process *proc_b;
+
+void proc_a_entry(void) {
+    printf("starting process A\n");
+    while (1) {
+        putchar('A');
+        delay();
+        scheduler();
+    }
+}
+
+void proc_b_entry(void) {
+    printf("starting process B\n");
+    while (1) {
+        putchar('B');
+        delay();
+        scheduler();
+    }
+}
+
 void kernel_main(void)
 {
     // Writes into .bss section value 0, some bootloaders do it automatically
@@ -174,6 +325,11 @@ void kernel_main(void)
     // stored in `stvec`
     WRITE_CSR(stvec, (uint32_t) kernel_entry);
 
+    // Process to run when there are no processes available
+    idle_proc = create_process((uint32_t) NULL);
+    idle_proc->pid = 0; // idle
+    current_proc = idle_proc;
+
     printf("Starting address: 0x%x\n", __free_ram);
     printf("Last address: 0x%x\n", __free_ram_end);
 
@@ -181,6 +337,12 @@ void kernel_main(void)
     printf("Allocated 2 pages starting from: 0x%x\n", addr);
     addr = alloc_pages(1);
     printf("Allocated new page starting from: 0x%x\n", addr);
+
+    // Starting two processes and switching between them
+    proc_a = create_process((uint32_t) proc_a_entry);
+    proc_b = create_process((uint32_t) proc_b_entry);
+
+    scheduler();
 
     for (;;)
         __asm__ __volatile__("wfi");
