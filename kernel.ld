@@ -2,6 +2,7 @@ ENTRY(boot)
 
 SECTIONS {
     . = 0x80200000; /* Base address for OpenSBI */
+    __kernel_base = .;
 
     /* Defining memory areas for code, read only data, initialized data and uninitialized data.
        When assining a new area the location `.` is automatically updated adding the size of the

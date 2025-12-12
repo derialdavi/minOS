@@ -21,4 +21,4 @@ run: $(OUT)
 		-nographic \
 		-serial mon:stdio \
 		--no-reboot \
-    	-kernel $(OUT)
+		-kernel $(OUT)
